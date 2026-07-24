@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Testable — Ad Job Ticket</title>
+<style>
+  :root{
+    --bg:#15171B;
+    --panel:#1C1F24;
+    --panel-2:#22262C;
+    --ink:#ECE9E2;
+    --muted:#8B9099;
+    --accent:#F2B705;
+    --accent-ink:#15171B;
+    --warn:#E2472B;
+    --line:#33373D;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); min-height:100vh;}
+  .wrap{max-width:620px; margin:0 auto; padding:24px 18px 64px;}
+  .topbar{display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid var(--accent); padding-bottom:14px; margin-bottom:22px;}
+  .brand{font-weight:800; font-size:22px; letter-spacing:-0.02em; text-transform:uppercase;}
+  .brand span{color:var(--accent);}
+  .ticket-no{font-family:var(--mono); color:var(--muted); font-size:12px;}
+  .gear-btn{
+    background:transparent; border:1px solid var(--line); color:var(--muted);
+    width:36px; height:36px; border-radius:8px; display:flex; align-items:center;
+    justify-content:center; cursor:pointer; transition:all .2s ease; padding:0;
+  }
+  .gear-btn:hover{color:var(--accent); border-color:var(--accent);}
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(10,11,13,0.6); backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px); display:none; align-items:center; justify-content:center;
+    z-index:100; padding:20px;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal-panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:24px; width:100%; max-width:380px; box-shadow:0 20px 60px rgba(0,0,0,0.5);
+  }
+  .modal-title{font-weight:800; font-size:16px; text-transform:uppercase; letter-spacing:0.02em; margin-bottom:4px;}
+  .modal-note{font-size:12px; color:var(--muted); line-height:1.5; margin-bottom:18px;}
+  .modal-panel label{display:block; margin-bottom:6px;}
+  .modal-panel input{margin-bottom:16px;}
+  .modal-actions{display:flex; gap:10px; margin-top:4px;}
+  .modal-actions .btn-primary, .modal-actions .btn-back{
+    margin-top:0; margin-bottom:0; flex:1; width:auto; padding:14px 18px;
+  }
+  .steps{display:flex; gap:6px; margin-bottom:18px;}
+  .step-dot{flex:1; height:4px; border-radius:2px; background:var(--line);}
+  .step-dot.done, .step-dot.active{background:var(--accent);}
+  .step-label{font-family:var(--mono); font-size:11px; color:var(--muted); margin-bottom:14px; text-transform:uppercase; letter-spacing:0.06em;}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:22px; margin-bottom:18px; display:none;}
+  .panel.visible{display:block;}
+  .panel-label{font-family:var(--mono); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent); margin-bottom:14px; display:flex; align-items:center; gap:8px;}
+  .panel-label::before{content:"◆"; font-size:9px;}
+  label{display:block; font-family:var(--mono); font-size:12px; color:var(--accent); margin-bottom:6px; margin-top:14px; text-transform:uppercase; letter-spacing:0.04em;}
+  label:first-of-type{margin-top:0;}
+  input[type=text], select, textarea{width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--ink); padding:10px 12px; border-radius:4px; font-size:14px; font-family:var(--sans);}
+  textarea{resize:vertical; min-height:56px; font-family:var(--sans);}
+  input[type=text]:focus, select:focus, textarea:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .row{display:flex; gap:12px;}
+  .row > div{flex:1;}
+  .stepper{display:flex; align-items:center; gap:10px; background:var(--panel-2); border:1px solid var(--line); border-radius:4px; padding:8px 12px;}
+  .stepper .val{font-family:var(--mono); font-weight:700; font-size:15px;}
+  .stepper .note{font-family:var(--mono); font-size:11px; color:var(--muted);}
+  button{font-family:var(--sans); font-weight:700; font-size:14px; border:none; border-radius:4px; padding:12px 18px; cursor:pointer; transition:opacity .15s;}
+  button:disabled{opacity:0.4; cursor:not-allowed;}
+  .btn-primary{background:var(--accent); color:var(--accent-ink); width:100%; margin-top:18px;}
+  .btn-primary:hover:not(:disabled){opacity:0.9;}
+  .btn-row{display:flex; gap:10px; margin-top:18px;}
+  .btn-row .btn-primary{margin-top:0; flex:2;}
+  .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--muted); flex:1;}
+  .btn-ghost:hover:not(:disabled){color:var(--ink); border-color:var(--ink);}
+
+  /* adaptive job-ticket button: green + raised when filled, hollow + flat when empty */
+  #continueBtn{
+    width:100%; margin-top:18px; font-size:15px; padding:14px 18px;
+    transition: all .18s ease;
+  }
+  #continueBtn.state-continue{
+    background: linear-gradient(180deg, #3FDE7A 0%, #22B85C 100%);
+    color:#0B2015;
+    border:1px solid #1C9A4D;
+    box-shadow: 0 3px 0 #17843F, 0 6px 14px rgba(34,184,92,0.35);
+    transform: translateY(0);
+  }
+  #continueBtn.state-continue:hover:not(:disabled){
+    transform: translateY(-1px);
+    box-shadow: 0 4px 0 #17843F, 0 8px 18px rgba(34,184,92,0.45);
+  }
+  #continueBtn.state-continue:active:not(:disabled){
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #17843F, 0 2px 6px rgba(34,184,92,0.3);
+  }
+  #continueBtn.state-skip{
+    background: transparent;
+    color: var(--muted);
+    border: 1px dashed var(--line);
+    box-shadow: none;
+  }
+  #continueBtn.state-skip:hover:not(:disabled){
+    color: var(--ink);
+    border-color: var(--muted);
+  }
+  .btn-back{
+    background:transparent; color:var(--muted); border:1px solid var(--line);
+    font-size:15px; font-family:var(--sans); font-weight:700; text-transform:none; letter-spacing:normal;
+    padding:14px 18px; border-radius:4px; margin-bottom:16px; cursor:pointer; text-decoration:none;
+    display:block; width:100%; text-align:center; transition: all .15s ease;
+  }
+  .btn-back:hover{color:var(--ink); border-color:var(--ink);}
+  .status{font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:10px; min-height:16px;}
+  .status.err{color:var(--warn);}
+  .angle-grid{display:grid; grid-template-columns:1fr; gap:10px; margin-top:14px;}
+  .angle-card{border:1px solid var(--line); border-radius:4px; padding:12px; cursor:pointer; background:var(--panel-2);}
+  .angle-card.selected{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset;}
+  .angle-card .tag{font-family:var(--mono); font-size:10px; color:var(--accent); text-transform:uppercase;}
+  .angle-card .hook{font-weight:700; margin:4px 0;}
+  .angle-card .copy{font-size:13px; color:var(--muted);}
+  .painpoints{margin:0; padding-left:18px; font-size:13px; color:var(--muted);}
+  .painpoints li{margin-bottom:4px;}
+  .proof-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px;}
+  .proof-card{border:1px solid var(--line); border-radius:4px; overflow:hidden; background:var(--panel-2);}
+  .proof-card img{width:100%; display:block; aspect-ratio:4/5; object-fit:cover; background:#000;}
+  .proof-meta{padding:8px 10px; font-family:var(--mono); font-size:11px; color:var(--muted);}
+  .proof-meta a{color:var(--accent); text-decoration:none;}
+  .roadmap{display:flex; flex-wrap:wrap; gap:8px;}
+  .chip{font-family:var(--mono); font-size:11px; color:var(--muted); border:1px dashed var(--line); padding:6px 10px; border-radius:20px;}
+  .skeleton{background:linear-gradient(90deg,var(--panel-2) 25%,var(--line) 50%,var(--panel-2) 75%); background-size:200% 100%; animation:shimmer 1.3s infinite; aspect-ratio:4/5; border-radius:4px;}
+  @keyframes shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+  .raw{white-space:pre-wrap; font-family:var(--mono); font-size:11px; color:var(--muted); background:var(--panel-2); border:1px solid var(--line); border-radius:4px; padding:10px; margin-top:10px; max-height:220px; overflow:auto;}
+  .hint{font-size:12px; color:var(--muted); margin-top:8px;}
+
+  .console-box{
+    margin-top:16px; background:#0B0D10; border:1px solid #23262C;
+    border-radius:14px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.35);
+    box-sizing:border-box; width:100%; max-width:100%;
+  }
+  .console-head{
+    display:flex; align-items:center; gap:16px;
+    padding:14px 18px; border-bottom:1px solid #1D2026;
+  }
+  .console-title{font-family:var(--mono); font-size:13px; letter-spacing:0.04em; color:var(--ink); font-weight:700; flex-shrink:0;}
+  .console-phase{
+    font-family:var(--mono); font-size:12px; letter-spacing:0.02em; color:var(--accent);
+    font-weight:600; flex:1;
+  }
+  .console-phase.done{color:#3FDE7A;}
+  .console-phase.error{color:var(--warn);}
+  .console-live{display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:12px; font-weight:600; flex-shrink:0;}
+  .console-live.st-connect{color:#FF9C33;}
+  .console-live.st-live{color:#3FDE7A;}
+  .console-live.st-error{color:var(--warn);}
+  .live-dot{width:8px; height:8px; border-radius:50%; animation:pulse 1.1s infinite;}
+  .st-connect .live-dot{background:#FF9C33; box-shadow:0 0 8px #FF9C33;}
+  .st-live .live-dot{background:#3FDE7A; box-shadow:0 0 8px #3FDE7A;}
+  .st-error .live-dot{background:var(--warn); box-shadow:0 0 8px var(--warn);}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
+  .console-log{
+    font-family:var(--mono); font-size:13px; line-height:2; color:#B8BCC4;
+    padding:16px 18px; min-height:100px; max-height:260px; overflow-y:auto;
+    box-sizing:border-box; width:100%;
+  }
+  .console-log .ln{white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;}
+  .console-log .ln .arrow{color:#565B63; margin-right:8px;}
+  .console-log .ln.strong{color:var(--ink); font-weight:600;}
+  .console-log .ln a.linktag{color:var(--accent); text-decoration:underline; text-underline-offset:2px;}
+  summary::-webkit-details-marker{display:none;}
+  summary::marker{content:'';}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div><div class="brand">Test<span>able</span></div></div>
+    <button class="gear-btn" id="gearBtn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
+  </div>
+
+  <div class="steps">
+    <div class="step-dot" data-dot="1"></div>
+    <div class="step-dot" data-dot="2"></div>
+    <div class="step-dot" data-dot="3"></div>
+  </div>
+  <div class="step-label" id="stepLabel">Step 1 of 3 — Job ticket</div>
+
+  <div class="panel" data-step="1">
+    <div class="panel-label">Product Link</div>
+    <input type="text" id="prodUrl" placeholder="https://ascendguidesco.netlify.app/">
+    <button class="btn-primary" id="continueBtn">Continue — Read the Product</button>
+
+    <div class="console-box" id="consoleBox" style="display:none;">
+      <div class="console-head">
+        <span class="console-title">Running</span>
+        <span class="console-phase" id="currentPhase"></span>
+        <span class="console-live" id="liveIndicator"><span class="live-dot" id="liveDot"></span><span id="liveText">Connect</span></span>
+      </div>
+      <div class="console-log" id="consoleLog"></div>
+    </div>
+  </div>
+
+  <div class="panel" data-step="2">
+
+    <div data-substep="1">
+      <div class="panel-label" id="audienceReadLabel">Audience Read</div>
+      <div id="audienceSummary"></div>
+      <ul class="painpoints" id="painList"></ul>
+
+      <div id="manualAngleWrap" style="display:none;">
+        <label for="manualHook">Ad hook</label>
+        <input type="text" id="manualHook" placeholder="e.g. Stop guessing what your business plan is missing">
+        <label for="manualCopy">Angle / supporting copy</label>
+        <textarea id="manualCopy" placeholder="1-2 sentences on the angle this ad is taking"></textarea>
+      </div>
+
+      <div id="angleGridWrap">
+        <label>Pick an angle</label>
+        <div class="angle-grid" id="angleGrid"></div>
+      </div>
+
+      <button class="btn-primary" id="angleNextBtn" disabled style="margin-top:24px; margin-bottom:8px;">Next</button>
+      <button class="btn-back" data-back="1" style="margin-top:0; margin-bottom:0;">back to product link</button>
+    </div>
+
+    <div data-substep="2" style="display:none;">
+      <label for="plateType">Plate (ad format)</label>
+      <select id="plateType">
+        <option value="instagram_post">Instagram post</option>
+        <option value="facebook_post">Facebook post</option>
+        <option value="your_story">Story (IG/FB)</option>
+        <option value="pinterest_pin">Pinterest pin</option>
+        <option value="poster">Poster</option>
+        <option value="flyer">Flyer</option>
+        <option value="email">Email</option>
+      </select>
+
+      <button class="btn-primary" id="plateNextBtn" style="margin-top:56px; margin-bottom:8px;">Next</button>
+      <button class="btn-back" data-substep-back="1" style="margin-top:0; margin-bottom:0;">back</button>
+    </div>
+
+    <div data-substep="3" style="display:none;">
+      <label>Run size (proofs this session)</label>
+      <div class="stepper">
+        <span class="val">1</span>
+        <span class="note">locked · scales to 2/day later</span>
+      </div>
+
+      <button class="btn-primary" id="generateBtn" disabled style="margin-top:56px; margin-bottom:8px;">Continue</button>
+      <button class="btn-back" data-substep-back="2" style="margin-top:0; margin-bottom:0;">back</button>
+      <div class="status" id="generateStatus" style="margin-top:10px;"></div>
+    </div>
+
+  </div>
+
+  <div class="panel" data-step="3">
+    <button class="btn-back" data-back="2">← back to angle</button>
+    <div class="panel-label">Proof Sheet</div>
+    <div class="proof-grid" id="proofGrid"></div>
+    <div class="raw" id="rawFallback" style="display:none;"></div>
+  </div>
+
+  <details class="panel visible" id="roadmapPanel" style="padding:0; overflow:hidden;">
+    <summary style="cursor:pointer; padding:16px 22px; font-family:var(--mono); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); list-style:none;">
+      ◆ To-Do / Coming to the Floor
+    </summary>
+    <div style="padding:0 22px 20px;">
+      <div class="roadmap">
+        <div class="chip">Video plates (Canva + HeyGen)</div>
+        <div class="chip">Full run · 30 proofs / campaign</div>
+        <div class="chip">Multi-agent QC pass</div>
+        <div class="chip">Auto-export to Gumroad/Manychat</div>
+      </div>
+    </div>
+  </details>
+</div>
+
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-panel">
+    <div class="modal-title">Access Code</div>
+    <div class="modal-note">Each run costs 1 credit. Enter the code you were given after purchase — it's remembered on this device.</div>
+    <label for="accessCode">Access code</label>
+    <input type="text" id="accessCode" placeholder="e.g. ASCEND-K7X2">
+    <div class="modal-note" id="creditsNote"></div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="saveSettingsBtn" style="margin-top:0;">Save</button>
+      <button class="btn-back" id="closeSettingsBtn" style="margin-top:0;">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_URL = "/.netlify/functions/claude-proxy";
+const MODEL = "claude-sonnet-4-6";
+const CANVA_MCP = { type: "url", url: "https://mcp.canva.com/mcp", name: "canva-mcp" };
+
+let analysis = null;
+let selectedAngle = null;
+
+const settingsModal = document.getElementById('settingsModal');
+const accessCodeInput = document.getElementById('accessCode');
+accessCodeInput.value = localStorage.getItem('testableAccessCode') || '';
+
+document.getElementById('gearBtn').addEventListener('click', () => settingsModal.classList.add('open'));
+document.getElementById('closeSettingsBtn').addEventListener('click', () => settingsModal.classList.remove('open'));
+settingsModal.addEventListener('click', (e) => { if(e.target === settingsModal) settingsModal.classList.remove('open'); });
+document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+  localStorage.setItem('testableAccessCode', accessCodeInput.value.trim());
+  settingsModal.classList.remove('open');
+});
+
+// first-time visitor with no code yet — prompt for it up front
+if(!accessCodeInput.value){ settingsModal.classList.add('open'); }
+
+const stepLabels = {1:'Step 1 of 3 — Product link', 2:'Step 2 of 3 — Audience & angle', 3:'Step 3 of 3 — Proof sheet'};
+function goToStep(n){
+  document.querySelectorAll('.panel[data-step]').forEach(p => p.classList.toggle('visible', p.dataset.step == n));
+  document.querySelectorAll('.step-dot').forEach(d => {
+    const dn = Number(d.dataset.dot);
+    d.classList.toggle('active', dn === n);
+    d.classList.toggle('done', dn < n);
+  });
+  document.getElementById('stepLabel').textContent = stepLabels[n];
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', () => goToStep(Number(b.dataset.back))));
+
+function showSubStep(n){
+  document.querySelectorAll('.panel[data-step="2"] [data-substep]').forEach(el => {
+    el.style.display = (el.dataset.substep == n) ? 'block' : 'none';
+  });
+}
+document.querySelectorAll('[data-substep-back]').forEach(b => b.addEventListener('click', () => showSubStep(Number(b.dataset.substepBack))));
+document.getElementById('angleNextBtn').addEventListener('click', () => showSubStep(2));
+document.getElementById('plateNextBtn').addEventListener('click', () => showSubStep(3));
+
+goToStep(1);
+
+function setStatus(id, msg, isErr){
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = 'status' + (isErr ? ' err' : '');
+}
+function stripFences(text){ return text.replace(/```json|```/g, '').trim(); }
+
+async function callClaude(body){
+  const code = localStorage.getItem('testableAccessCode') || '';
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, ...body })
+  });
+  if(!res.ok){
+    const errText = await res.text();
+    let parsed;
+    try { parsed = JSON.parse(errText); } catch(e){ parsed = null; }
+    if(res.status === 401 || res.status === 403){
+      settingsModal.classList.add('open');
+      throw new Error('access code needed — add one in settings');
+    }
+    if(res.status === 402){
+      throw new Error('out of credits — top up to keep generating');
+    }
+    throw new Error((parsed && parsed.message) || ('API error ' + res.status + ': ' + errText.slice(0,200)));
+  }
+  const remaining = res.headers.get('X-Credits-Remaining');
+  if(remaining !== null){
+    document.getElementById('creditsNote').textContent = remaining + ' credit' + (remaining === '1' ? '' : 's') + ' remaining';
+  }
+  return res.json();
+}
+function getTextBlocks(data){ return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n'); }
+function getMcpResultBlocks(data){ return (data.content || []).filter(b => b.type === 'mcp_tool_result'); }
+
+function renderAngles(angles){
+  const grid = document.getElementById('angleGrid');
+  grid.innerHTML = '';
+  angles.forEach((a, i) => {
+    const card = document.createElement('div');
+    card.className = 'angle-card';
+    card.innerHTML = `<div class="tag">Angle ${i+1}</div><div class="hook">${a.hook}</div><div class="copy">${a.angle_copy}</div>`;
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.angle-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      selectedAngle = a;
+      document.getElementById('angleNextBtn').disabled = false;
+    });
+    grid.appendChild(card);
+  });
+}
+
+function enterManualMode(){
+  document.getElementById('audienceReadLabel').style.display = 'none';
+  document.getElementById('audienceSummary').innerHTML = '';
+  document.getElementById('painList').innerHTML = '';
+  document.getElementById('angleGridWrap').style.display = 'none';
+  document.getElementById('manualAngleWrap').style.display = 'block';
+
+  const hookInput = document.getElementById('manualHook');
+  const copyInput = document.getElementById('manualCopy');
+  const genBtn = document.getElementById('angleNextBtn');
+  function syncManual(){
+    if(hookInput.value.trim()){
+      selectedAngle = { hook: hookInput.value.trim(), angle_copy: copyInput.value.trim() };
+      genBtn.disabled = false;
+    } else { genBtn.disabled = true; }
+  }
+  hookInput.addEventListener('input', syncManual);
+  copyInput.addEventListener('input', syncManual);
+  analysis = analysis || { product_name: 'Product', audience: '' };
+  showSubStep(1);
+  goToStep(2);
+}
+
+const prodUrlInput = document.getElementById('prodUrl');
+const continueBtn = document.getElementById('continueBtn');
+function syncButtonLabel(){
+  const filled = prodUrlInput.value.trim().length > 0;
+  continueBtn.textContent = filled ? 'Continue' : 'Skip';
+  continueBtn.classList.toggle('state-continue', filled);
+  continueBtn.classList.toggle('state-skip', !filled);
+}
+prodUrlInput.addEventListener('input', syncButtonLabel);
+syncButtonLabel();
+
+// -- console helpers --
+const consoleBox = document.getElementById('consoleBox');
+const consoleLog = document.getElementById('consoleLog');
+const currentPhase = document.getElementById('currentPhase');
+const liveIndicator = document.getElementById('liveIndicator');
+const liveText = document.getElementById('liveText');
+const phaseNames = { fetch:'Fetch', parse:'Parse', audience:'Audience', angles:'Angles' };
+
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+function resetConsole(){
+  consoleLog.innerHTML = '';
+  currentPhase.textContent = '';
+  currentPhase.className = 'console-phase';
+  consoleBox.style.display = 'block';
+}
+function setLive(state){
+  liveIndicator.className = 'console-live st-' + state;
+  liveText.textContent = state === 'connect' ? 'Connect' : state === 'error' ? 'Error' : 'Live';
+}
+function logLine(text, strong){
+  const row = document.createElement('div');
+  row.className = 'ln' + (strong ? ' strong' : '');
+  row.innerHTML = `<span class="arrow">-</span>${text}`;
+  consoleLog.appendChild(row);
+  consoleLog.scrollTop = consoleLog.scrollHeight;
+}
+// only ever shows the phase currently in progress — not the full list
+function setPhase(phase, state){
+  currentPhase.textContent = phaseNames[phase] || phase;
+  currentPhase.className = 'console-phase' + (state ? ' ' + state : '');
+}
+
+async function fetchPageText(url){
+  // Try a CORS-friendly reader proxy first — most static sites (Netlify included)
+  // don't send the headers needed for a browser to read a direct cross-origin fetch.
+  try {
+    const res = await fetch('https://r.jina.ai/' + url);
+    if(res.ok){
+      const text = (await res.text()).trim();
+      if(text.length > 50) return text.slice(0, 6000);
+    }
+  } catch(e){ /* fall through */ }
+
+  // Fall back to a direct fetch, in case the target does allow it.
+  try {
+    const res = await fetch(url);
+    if(res.ok){
+      const html = await res.text();
+      const text = html
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if(text) return text.slice(0, 6000);
+    }
+  } catch(e){ /* fall through */ }
+
+  return null;
+}
+
+continueBtn.addEventListener('click', async () => {
+  const url = prodUrlInput.value.trim();
+  if(!url){ enterManualMode(); return; }
+  const btn = continueBtn;
+  btn.disabled = true;
+  resetConsole();
+
+  setLive('connect');
+  logLine('connecting');
+  await sleep(700);
+
+  setLive('live');
+  setPhase('fetch', '');
+  logLine('<a class="linktag">Link</a>');
+  await sleep(600);
+
+  const pageText = await fetchPageText(url);
+  await sleep(500);
+
+  const instructions = `Extract, in your own analysis (do not quote the page text):
+- product_name
+- one-line audience description
+- 3 concrete pain points this audience has that the product addresses
+- 3 distinct ad angles, each with: name, a short hook (under 12 words), and 1-sentence angle_copy
+
+If you cannot access the page at all, do NOT explain why or apologize — instead make your best-effort guess from the URL/domain name alone and still return the JSON below.
+
+Respond with ONLY raw JSON, no markdown fences, no preamble, no explanation, in this exact shape:
+{"product_name":"","audience":"","pain_points":["","",""],"angles":[{"name":"","hook":"","angle_copy":""},{"name":"","hook":"","angle_copy":""},{"name":"","hook":"","angle_copy":""}]}`;
+
+  let messageBody;
+  if(pageText){
+    logLine('fetched', true);
+    await sleep(600);
+    setPhase('parse', '');
+    logLine('parsing');
+    messageBody = {
+      model: MODEL,
+      max_tokens: 1000,
+      messages: [{
+        role: "user",
+        content: `Here is the raw text content of a product page (${url}):\n\n"""${pageText}"""\n\n${instructions}`
+      }]
+    };
+  } else {
+    logLine('browser fetch blocked - server fetch', true);
+    await sleep(600);
+    setPhase('parse', '');
+    logLine('parsing');
+    // The browser sandbox can't reach arbitrary third-party domains, so hand this
+    // to Claude with a hosted fetch tool that runs server-side instead.
+    messageBody = {
+      model: MODEL,
+      max_tokens: 1000,
+      tools: [
+        { type: "web_fetch_20250910", name: "web_fetch", max_uses: 2 },
+        { type: "web_search_20250305", name: "web_search" }
+      ],
+      messages: [{
+        role: "user",
+        content: `First use the web_fetch tool to retrieve this exact URL directly: ${url}\nOnly fall back to web_search if web_fetch is unavailable or fails.\n\n${instructions}`
+      }]
+    };
+  }
+
+  async function requestAnalysis(body){
+    const data = await callClaude(body);
+    if(data.error){ throw new Error(data.error.message || data.error.type || 'API rejected the request'); }
+    const raw = stripFences(getTextBlocks(data));
+    if(!raw){ throw new Error('empty response from model'); }
+    // pull out just the {...} block in case the model added any stray text around it
+    const match = raw.match(/\{[\s\S]*\}/);
+    return JSON.parse(match ? match[0] : raw);
+  }
+
+  try {
+    let parsed;
+    try {
+      parsed = await requestAnalysis(messageBody);
+    } catch(err){
+      if(!pageText && messageBody.tools){
+        logLine('retrying - search only');
+        await sleep(500);
+        parsed = await requestAnalysis({
+          model: MODEL,
+          max_tokens: 1000,
+          tools: [{ type: "web_search_20250305", name: "web_search" }],
+          messages: messageBody.messages
+        });
+      } else {
+        throw err;
+      }
+    }
+
+    await sleep(500);
+    setPhase('audience', '');
+    logLine('audience found');
+    await sleep(700);
+
+    setPhase('angles', '');
+    logLine('angles ready');
+    await sleep(700);
+
+    setPhase('angles', 'done');
+    logLine('done', true);
+    setLive('live');
+
+    analysis = parsed;
+    document.getElementById('audienceReadLabel').style.display = '';
+    document.getElementById('manualAngleWrap').style.display = 'none';
+    document.getElementById('angleGridWrap').style.display = 'block';
+    document.getElementById('audienceSummary').innerHTML =
+      `<div style="font-weight:700;">${parsed.product_name || 'Product'}</div>
+       <div style="color:var(--muted); font-size:13px; margin-top:2px;">${parsed.audience || ''}</div>`;
+    document.getElementById('painList').innerHTML = (parsed.pain_points || []).map(p => `<li>${p}</li>`).join('');
+    renderAngles(parsed.angles || []);
+
+    await sleep(600);
+    showSubStep(1);
+    goToStep(2);
+  } catch(err){
+    setLive('error');
+    setPhase(currentPhase.textContent ? currentPhase.textContent.toLowerCase() : 'fetch', 'error');
+    logLine('error - ' + (err.message || 'unknown').slice(0,90), true);
+    await sleep(600);
+    logLine('switching to manual entry');
+    await sleep(600);
+    enterManualMode();
+  } finally { btn.disabled = false; }
+});
+
+document.getElementById('generateBtn').addEventListener('click', async () => {
+  if(!selectedAngle) return;
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true;
+  setStatus('generateStatus', 'Sending the plate to Canva...');
+
+  const plateType = document.getElementById('plateType').value;
+  goToStep(3);
+  const grid = document.getElementById('proofGrid');
+  grid.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+  document.getElementById('rawFallback').style.display = 'none';
+
+  try {
+    const data = await callClaude({
+      model: MODEL,
+      max_tokens: 1500,
+      mcp_servers: [CANVA_MCP],
+      messages: [{
+        role: "user",
+        content: `Using Canva, generate a "${plateType}" design candidate for an ad.
+Product: ${analysis ? analysis.product_name : 'N/A'}
+Audience: ${analysis ? analysis.audience : 'N/A'}
+Angle: ${selectedAngle.hook} — ${selectedAngle.angle_copy}
+Write tight, high-converting ad copy for the design text. Return the generated design candidates.`
+      }]
+    });
+
+    const mcpBlocks = getMcpResultBlocks(data);
+    let candidates = [];
+    let rawDump = '';
+    mcpBlocks.forEach(block => {
+      const t = block.content && block.content[0] && block.content[0].text;
+      if(!t) return;
+      rawDump += t + '\n\n';
+      try {
+        const parsed = JSON.parse(t);
+        const found = parsed.candidates || parsed.designs || (Array.isArray(parsed) ? parsed : null);
+        if(found) candidates = candidates.concat(found);
+      } catch(e){ /* not JSON */ }
+    });
+
+    grid.innerHTML = '';
+    if(candidates.length){
+      candidates.forEach(c => {
+        const preview = c.preview || c.thumbnail || c.preview_url || c.thumbnail_url || '';
+        const link = c.url || c.design_url || c.candidate_url || '#';
+        const card = document.createElement('div');
+        card.className = 'proof-card';
+        card.innerHTML = `${preview ? `<img src="${preview}" alt="ad proof">` : ''}
+          <div class="proof-meta">Proof ${c.candidate_id || c.id || ''}<br><a href="${link}" target="_blank">Open in Canva →</a></div>`;
+        grid.appendChild(card);
+      });
+      setStatus('generateStatus', 'Proofs pulled. Open one in Canva to finish and export.');
+    } else {
+      setStatus('generateStatus', 'Got a response but could not auto-parse proof thumbnails — raw output below.');
+      document.getElementById('rawFallback').style.display = 'block';
+      document.getElementById('rawFallback').textContent = rawDump || getTextBlocks(data) || 'No content returned.';
+    }
+  } catch(err){
+    setStatus('generateStatus', err.message, true);
+    grid.innerHTML = '';
+  } finally { btn.disabled = false; }
+});
+</script>
+</body>
+</html>

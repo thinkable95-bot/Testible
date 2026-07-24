@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Testable — Admin</title>
+<style>
+  body{background:#15171B; color:#ECE9E2; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; padding:24px; max-width:420px; margin:0 auto;}
+  h1{font-size:18px; text-transform:uppercase; letter-spacing:0.02em;}
+  label{display:block; margin:16px 0 6px; font-size:12px; color:#8B9099; text-transform:uppercase; letter-spacing:0.03em;}
+  input{width:100%; box-sizing:border-box; background:#1C1F24; border:1px solid #33373D; color:#ECE9E2; padding:12px; border-radius:8px; font-size:15px;}
+  button{width:100%; margin-top:20px; padding:14px; border:none; border-radius:8px; background:#3FDE7A; color:#15171B; font-weight:700; font-size:15px; cursor:pointer;}
+  button:active{transform:translateY(1px);}
+  .result{margin-top:16px; font-family:ui-monospace,monospace; font-size:13px; white-space:pre-wrap; color:#8B9099;}
+  .result.err{color:#E2472B;}
+</style>
+</head>
+<body>
+  <h1>Grant Credits</h1>
+
+  <label for="adminSecret">Admin secret</label>
+  <input type="password" id="adminSecret" placeholder="your ADMIN_SECRET">
+
+  <label for="code">Access code (make one up, or reuse an existing one to top up)</label>
+  <input type="text" id="code" placeholder="e.g. ASCEND-K7X2">
+
+  <label for="credits">Credits to add</label>
+  <input type="number" id="credits" value="20">
+
+  <button id="grantBtn">Grant credits</button>
+  <div class="result" id="result"></div>
+
+<script>
+document.getElementById('grantBtn').addEventListener('click', async () => {
+  const adminSecret = document.getElementById('adminSecret').value.trim();
+  const code = document.getElementById('code').value.trim();
+  const credits = Number(document.getElementById('credits').value);
+  const resultEl = document.getElementById('result');
+  resultEl.className = 'result';
+  resultEl.textContent = 'Working...';
+
+  try {
+    const res = await fetch('/.netlify/functions/admin-credits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminSecret, code, credits })
+    });
+    const data = await res.json();
+    if(!res.ok){ throw new Error(data.error || 'Request failed'); }
+    resultEl.textContent = `Code "${data.code}" now has ${data.credits} credits.`;
+  } catch(err){
+    resultEl.className = 'result err';
+    resultEl.textContent = 'Error: ' + err.message;
+  }
+});
+</script>
+</body>
+</html>
